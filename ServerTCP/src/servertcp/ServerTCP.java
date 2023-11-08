@@ -1,18 +1,14 @@
-package servertcp;
-
-/**
- *
- * @author neidi
- */
-
 import java.io.*;
 import java.net.*;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class ServerTCP {
     private ServerSocket serverSocket;
     private DefaultTableModel tableModel;
+    private CopyOnWriteArrayList<ClientHandler> clients = new CopyOnWriteArrayList<>();
 
     public ServerTCP(int port) {
         try {
@@ -20,18 +16,20 @@ public class ServerTCP {
             tableModel = new DefaultTableModel(new String[]{"Nome", "Status", "Dados"}, 0);
 
             JFrame frame = new JFrame("Servidor");
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.setSize(400, 300);
+
             JTable table = new JTable(tableModel);
             JScrollPane scrollPane = new JScrollPane(table);
 
             frame.add(scrollPane);
-            frame.setSize(400, 300);
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setVisible(true);
 
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 ClientHandler handler = new ClientHandler(clientSocket);
                 handler.start();
+                clients.add(handler);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -41,28 +39,37 @@ public class ServerTCP {
     private class ClientHandler extends Thread {
         private Socket clientSocket;
         private String clientName;
+        private int rowIndex;
 
         public ClientHandler(Socket socket) {
             this.clientSocket = socket;
             this.clientName = "Cliente" + clientSocket.getPort();
-            tableModel.addRow(new Object[]{clientName, "Conectado", "Aguardando mensagens..."});
+            SwingUtilities.invokeLater(() -> {
+                rowIndex = tableModel.getRowCount();
+                tableModel.addRow(new Object[]{clientName, "Conectado", "Aguardando mensagens..."});
+            });
         }
 
         public void run() {
             try {
                 BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
 
                 String message;
                 while ((message = in.readLine()) != null) {
-                    tableModel.setValueAt("Recebendo mensagem...", tableModel.getRowCount() - 1, 2);
-      
+                    final String finalMessage = message;
+                    SwingUtilities.invokeLater(() -> {
+                        tableModel.setValueAt(finalMessage, rowIndex, 2);
+                    });
                 }
 
-                tableModel.setValueAt("Desconectado", tableModel.getRowCount() - 1, 1);
-                out.close();
+                SwingUtilities.invokeLater(() -> {
+                    tableModel.setValueAt("Desconectado", rowIndex, 1);
+                });
+
                 in.close();
                 clientSocket.close();
+
+                clients.remove(this);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -70,7 +77,7 @@ public class ServerTCP {
     }
 
     public static void main(String[] args) {
-        int port = 12345; // Porta do servidor
+        int port = 12345;
         new ServerTCP(port);
     }
 }
