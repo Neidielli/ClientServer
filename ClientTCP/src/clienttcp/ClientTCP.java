@@ -1,9 +1,8 @@
-import java.io.*;
-import java.net.*;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.event.*;
+import java.io.*;
+import java.net.Socket;
 
 public class ClientTCP {
     private Socket socket;
@@ -11,11 +10,13 @@ public class ClientTCP {
     private BufferedReader in;
     private JTextArea chatTextArea;
     private JTextField messageField;
+    private JTextField serverAddressField;
+    private JTextField portField;
+    private JButton connectButton;
+    private JButton sendButton;
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            new ClientTCP().createAndShowGUI();
-        });
+        SwingUtilities.invokeLater(() -> new ClientTCP().createAndShowGUI());
     }
 
     public void createAndShowGUI() {
@@ -26,16 +27,20 @@ public class ClientTCP {
         JPanel panel = new JPanel();
         panel.setLayout(new FlowLayout(FlowLayout.LEFT, 5, 5));
 
-        JTextField serverAddressField = new JTextField("localhost");
+        serverAddressField = new JTextField("localhost");
         serverAddressField.setPreferredSize(new Dimension(100, 30));
         panel.add(serverAddressField);
 
-        JTextField portField = new JTextField("12345");
+        portField = new JTextField("12345");
         portField.setPreferredSize(new Dimension(70, 30));
         panel.add(portField);
 
-        JButton connectButton = new JButton("Conectar");
+        connectButton = new JButton("Conectar");
         panel.add(connectButton);
+
+        sendButton = new JButton("Enviar");
+        sendButton.setEnabled(false);
+        panel.add(sendButton);
 
         frame.add(panel, BorderLayout.NORTH);
 
@@ -46,8 +51,13 @@ public class ClientTCP {
         messageField = new JTextField();
         frame.add(messageField, BorderLayout.SOUTH);
 
-        JButton sendButton = new JButton("Enviar");
-        sendButton.setEnabled(false);
+        configureListeners(frame);
+
+        frame.setVisible(true);
+    }
+
+    private void configureListeners(JFrame frame) {
+        connectButton.addActionListener(e -> handleConnect());
 
         sendButton.addActionListener(e -> {
             String message = messageField.getText();
@@ -55,54 +65,67 @@ public class ClientTCP {
             messageField.setText("");
         });
 
-        frame.add(sendButton, BorderLayout.SOUTH);
+        frame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent windowEvent) {
+                disconnect();
+            }
+        });
+    }
 
-        frame.setVisible(true);
-
-        connectButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                String serverAddress = serverAddressField.getText();
-                int serverPort = Integer.parseInt(portField.getText());
-
+    private void handleConnect() {
+        String serverAddress = serverAddressField.getText();
+        int serverPort;
+        try {
+            serverPort = Integer.parseInt(portField.getText());
+        } catch (NumberFormatException ex) {
+            showError("A porta deve ser um número válido.");
+            return;
+        }
+    
+        try {
+            socket = new Socket(serverAddress, serverPort);
+            out = new PrintWriter(socket.getOutputStream(), true);
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+    
+            connectButton.setEnabled(false);
+            sendButton.setEnabled(true);
+    
+            new Thread(() -> {
                 try {
-                    socket = new Socket(serverAddress, serverPort);
-                    out = new PrintWriter(socket.getOutputStream(), true);
-                    in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-
-                    connectButton.setEnabled(false);
-                    sendButton.setEnabled(true);
-
                     String serverResponse;
                     while ((serverResponse = in.readLine()) != null) {
-                        chatTextArea.append("Servidor: " + serverResponse + "\n");
+                        final String responseCopy = serverResponse;  // Cópia da variável
+                        SwingUtilities.invokeLater(() -> {
+                            chatTextArea.append("Servidor: " + responseCopy + "\n");
+                        });
                     }
-
-                    // Cliente foi desconectado, então feche a conexão e atualize a interface
-                    socket.close();
-                    out.close();
-                    in.close();
-                    connectButton.setEnabled(true);
-                    sendButton.setEnabled(false);
-                    chatTextArea.append("Desconectado\n");
-                } catch (NumberFormatException ex) {
-                    JOptionPane.showMessageDialog(frame, "A porta deve ser um número válido.");
-                } catch (IOException ex) {
-                    JOptionPane.showMessageDialog(frame, "Erro ao conectar ao servidor.");
+                    disconnect();
+                } catch (IOException e) {
+                    showError("Erro ao receber mensagens do servidor.");
                 }
-            }
-        });
+            }).start();
+        } catch (IOException ex) {
+            showError("Erro ao conectar ao servidor.");
+        }
+    }
 
-        frame.addWindowListener(new java.awt.event.WindowAdapter() {
-            @Override
-            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
-                if (socket != null && !socket.isClosed()) {
-                    try {
-                        socket.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
+    private void disconnect() {
+        if (socket != null && !socket.isClosed()) {
+            try {
+                socket.close();
+                out.close();
+                in.close();
+                connectButton.setEnabled(true);
+                sendButton.setEnabled(false);
+                chatTextArea.append("Desconectado\n");
+            } catch (IOException e) {
+                showError("Erro ao desconectar do servidor.");
             }
-        });
+        }
+    }
+
+    private void showError(String message) {
+        JOptionPane.showMessageDialog(null, message, "Erro", JOptionPane.ERROR_MESSAGE);
     }
 }
