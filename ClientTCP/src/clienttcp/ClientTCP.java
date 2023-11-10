@@ -48,7 +48,7 @@ public class ClientTCP {
         chatTextArea.setEditable(false);
         frame.add(new JScrollPane(chatTextArea), BorderLayout.CENTER);
 
-        messageField = new JTextField();
+        messageField = new JTextField("Teste");
         frame.add(messageField, BorderLayout.SOUTH);
 
         configureListeners(frame);
@@ -97,14 +97,16 @@ public class ClientTCP {
                     while ((serverResponse = in.readLine()) != null) {
                         final String responseCopy = serverResponse;  // Cópia da variável
                         SwingUtilities.invokeLater(() -> {
-                            chatTextArea.append("Servidor: " + responseCopy + "\n");
+                            chatTextArea.append(responseCopy + "\n");
                         });
                     }
                     disconnect();
                 } catch (IOException e) {
+                    e.printStackTrace();  // Imprimir a pilha de exceções para depuração
                     showError("Erro ao receber mensagens do servidor.");
                 }
             }).start();
+            
         } catch (IOException ex) {
             showError("Erro ao conectar ao servidor.");
         }

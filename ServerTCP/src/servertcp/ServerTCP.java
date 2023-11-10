@@ -15,15 +15,7 @@ public class ServerTCP {
             serverSocket = new ServerSocket(port);
             tableModel = new DefaultTableModel(new String[]{"Nome", "Status", "Dados"}, 0);
 
-            JFrame frame = new JFrame("Servidor");
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            frame.setSize(400, 300);
-
-            JTable table = new JTable(tableModel);
-            JScrollPane scrollPane = new JScrollPane(table);
-
-            frame.add(scrollPane);
-            frame.setVisible(true);
+            SwingUtilities.invokeLater(this::initGUI);
 
             while (true) {
                 Socket clientSocket = serverSocket.accept();
@@ -36,42 +28,72 @@ public class ServerTCP {
         }
     }
 
+    private void initGUI() {
+        JFrame frame = new JFrame("Servidor");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(400, 300);
+
+        JTable table = new JTable(tableModel);
+        JScrollPane scrollPane = new JScrollPane(table);
+
+        frame.add(scrollPane);
+        frame.setVisible(true);
+    }
+
     private class ClientHandler extends Thread {
         private Socket clientSocket;
+        private PrintWriter clientOut;
         private String clientName;
         private int rowIndex;
 
         public ClientHandler(Socket socket) {
             this.clientSocket = socket;
             this.clientName = "Cliente" + clientSocket.getPort();
-            SwingUtilities.invokeLater(() -> {
-                rowIndex = tableModel.getRowCount();
-                tableModel.addRow(new Object[]{clientName, "Conectado", "Aguardando mensagens..."});
-            });
+            this.rowIndex = tableModel.getRowCount();
+
+            try {
+                this.clientOut = new PrintWriter(clientSocket.getOutputStream(), true);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            SwingUtilities.invokeLater(() ->
+                    tableModel.addRow(new Object[]{clientName, "Conectado", "Aguardando mensagens..."}));
         }
 
         public void run() {
-            try {
-                BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-
+            try (BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()))) {
                 String message;
                 while ((message = in.readLine()) != null) {
                     final String finalMessage = message;
                     SwingUtilities.invokeLater(() -> {
                         tableModel.setValueAt(finalMessage, rowIndex, 2);
+                        sendToAllClients("Cliente" + clientSocket.getPort() + ": " + finalMessage);
                     });
                 }
 
-                SwingUtilities.invokeLater(() -> {
-                    tableModel.setValueAt("Desconectado", rowIndex, 1);
-                });
-
-                in.close();
-                clientSocket.close();
+                SwingUtilities.invokeLater(() -> tableModel.setValueAt("Desconectado", rowIndex, 1));
 
                 clients.remove(this);
             } catch (IOException e) {
                 e.printStackTrace();
+            } finally {
+                closeResources();
+            }
+        }
+
+        private void closeResources() {
+            try {
+                clientOut.close();
+                clientSocket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        private void sendToAllClients(String message) {
+            for (ClientHandler client : clients) {
+                client.clientOut.println(message);
             }
         }
     }
