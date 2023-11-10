@@ -48,7 +48,7 @@ public class ClientTCP {
         chatTextArea.setEditable(false);
         frame.add(new JScrollPane(chatTextArea), BorderLayout.CENTER);
 
-        messageField = new JTextField("Teste");
+        messageField = new JTextField();
         frame.add(messageField, BorderLayout.SOUTH);
 
         configureListeners(frame);
@@ -74,41 +74,50 @@ public class ClientTCP {
     }
 
     private void handleConnect() {
-        String serverAddress = serverAddressField.getText();
-        int serverPort;
-        try {
-            serverPort = Integer.parseInt(portField.getText());
-        } catch (NumberFormatException ex) {
-            showError("A porta deve ser um número válido.");
-            return;
-        }
-    
-        try {
-            socket = new Socket(serverAddress, serverPort);
-            out = new PrintWriter(socket.getOutputStream(), true);
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-    
-            connectButton.setEnabled(false);
-            sendButton.setEnabled(true);
-    
-            new Thread(() -> {
-                try {
-                    String serverResponse;
-                    while ((serverResponse = in.readLine()) != null) {
-                        final String responseCopy = serverResponse;  // Cópia da variável
-                        SwingUtilities.invokeLater(() -> {
-                            chatTextArea.append(responseCopy + "\n");
-                        });
+        if (socket != null && !socket.isClosed()) {
+            // Se o socket estiver conectado, desconecte
+            connectButton.setText("Conectar");
+            disconnect();
+        } else {
+            // Se o socket não estiver conectado, faça a conexão
+            String serverAddress = serverAddressField.getText();
+            int serverPort;
+            try {
+                serverPort = Integer.parseInt(portField.getText());
+            } catch (NumberFormatException ex) {
+                showError("A porta deve ser um número válido.");
+                return;
+            }
+
+            try {
+                socket = new Socket(serverAddress, serverPort);
+                out = new PrintWriter(socket.getOutputStream(), true);
+                in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+                connectButton.setText("Desconectar"); // Altere o texto do botão para "Desconectar"
+                sendButton.setEnabled(true);
+
+                new Thread(() -> {
+                    try {
+                        String serverResponse;
+                        while (socket != null && !socket.isClosed() && (serverResponse = in.readLine()) != null) {
+                            final String responseCopy = serverResponse;
+                            SwingUtilities.invokeLater(() -> {
+                                chatTextArea.append(responseCopy + "\n");
+                            });
+                        }
+                        disconnect();
+                    } catch (IOException e) {
+                        if (!socket.isClosed()) {
+                            e.printStackTrace();
+                            showError("Erro ao receber mensagens do servidor.");
+                        }
                     }
-                    disconnect();
-                } catch (IOException e) {
-                    e.printStackTrace();  // Imprimir a pilha de exceções para depuração
-                    showError("Erro ao receber mensagens do servidor.");
-                }
-            }).start();
-            
-        } catch (IOException ex) {
-            showError("Erro ao conectar ao servidor.");
+                }).start();
+
+            } catch (IOException ex) {
+                showError("Erro ao conectar ao servidor.");
+            }
         }
     }
 

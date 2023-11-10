@@ -13,7 +13,7 @@ public class ServerTCP {
     public ServerTCP(int port) {
         try {
             serverSocket = new ServerSocket(port);
-            tableModel = new DefaultTableModel(new String[]{"Nome", "Status", "Dados"}, 0);
+            tableModel = new DefaultTableModel(new String[] { "Nome", "Status", "Dados" }, 0);
 
             SwingUtilities.invokeLater(this::initGUI);
 
@@ -57,8 +57,8 @@ public class ServerTCP {
                 e.printStackTrace();
             }
 
-            SwingUtilities.invokeLater(() ->
-                    tableModel.addRow(new Object[]{clientName, "Conectado", "Aguardando mensagens..."}));
+            SwingUtilities.invokeLater(
+                    () -> tableModel.addRow(new Object[] { clientName, "Conectado", "Aguardando mensagens..." }));
         }
 
         public void run() {
